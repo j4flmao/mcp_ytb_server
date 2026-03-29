@@ -87,4 +87,10 @@ jobs:
           fi
           cp ../README.md .
           npm version "$VERSION" --no-git-tag-version --allow-same-version
-          npm publish --access public
+          npm publish --access public || {
+            if npm view "@mcp_ytb/mcp_ytb_server@$VERSION" >/dev/null 2>&1; then
+              echo "Version $VERSION already exists on npm, skipping publish."
+              exit 0
+            fi
+            exit 1
+          }
