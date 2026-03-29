@@ -1,0 +1,10 @@
+# Binaries
+*.exe
+video-mcp
+
+# Local outputs
+output/
+
+# Cookies (sensitive)
+cookies.txt
+cookies*.txt

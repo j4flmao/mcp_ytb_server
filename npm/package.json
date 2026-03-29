@@ -1,0 +1,19 @@
+{
+  "name": "@mcp_ytb/mcp_ytb_server",
+  "version": "0.1.0",
+  "description": "MCP server binary wrapper for mcp_ytb_server (Go).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/j4flmao/mcp_ytb_server.git"
+  },
+  "bin": {
+    "mcp-ytb-server": "bin/mcp-ytb-server.js"
+  },
+  "files": [
+    "bin/**"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
+}

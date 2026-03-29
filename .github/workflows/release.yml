@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Extract version
+        id: version
+        run: echo "value=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Build binaries for npm package
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          mkdir -p npm/bin
+          find npm/bin -maxdepth 1 -type d -name '*-*' -exec rm -rf {} +
+          test -f npm/bin/mcp-ytb-server.js
+
+          for GOOS in darwin linux windows; do
+            for GOARCH in amd64 arm64; do
+              BIN="video-mcp"
+              if [ "$GOOS" = "windows" ]; then BIN="video-mcp.exe"; fi
+
+              OUTDIR="npm/bin/${GOOS}-${GOARCH}"
+              mkdir -p "$OUTDIR"
+
+              CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -trimpath -o "$OUTDIR/$BIN" .
+
+              if [ "$GOOS" != "windows" ]; then chmod +x "$OUTDIR/$BIN"; fi
+            done
+          done
+
+      - name: Remove existing release assets (rerun-safe)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          release_id="$(gh api "/repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" --jq '.id' 2>/dev/null || true)"
+          if [ -z "${release_id}" ]; then
+            exit 0
+          fi
+          gh api "/repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" --jq '.[].id' \
+            | while read -r asset_id; do
+              gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}" >/dev/null || true
+            done
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            npm/bin/**/*
+          generate_release_notes: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Publish to npm
+        working-directory: npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "Missing NPM_TOKEN secret (NODE_AUTH_TOKEN is empty)" >&2
+            exit 1
+          fi
+          cp ../README.md .
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          npm publish --access public
